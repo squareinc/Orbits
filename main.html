@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Orbits</title>
+	<style>
+		body { margin: 0; }
+		canvas { width: 100%; height: 100% }
+	</style>
+	<script src="three.js"></script>
+	<script src="dat.gui.min.js"></script>
+</head>
+<body>
+	<script>
+		
+	// Region preps the world
+		var scene = new THREE.Scene();
+		scene.background = new THREE.Color( 0x777777 );
+		var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+		var renderer = new THREE.WebGLRenderer();
+		renderer.setSize( window.innerWidth, window.innerHeight );
+		document.body.appendChild( renderer.domElement );
+
+		camera.position.z = 200;
+
+	// End Region
+
+	// Region methods
+
+		function planetHolder()
+		{
+			this.listOfPlanets = {};
+
+			this.get = function(uuid)
+			{
+				return this.listOfPlanets[uuid];
+			};
+
+			this.add = function(planet)
+			{
+				this.listOfPlanets[planet.uuid] = planet;
+			};
+
+			this.remove = function(uuid)
+			{
+				if (this.listOfPlanets[uuid]) scene.remove(this.listOfPlanets[uuid].mesh);
+				delete this.listOfPlanets[uuid];
+			}
+
+			this.clear = function()
+			{
+				this.listOfPlanets = {};
+				while(scene.children.length > 0){ 
+				    scene.remove(scene.children[0]); 
+				}
+			}
+		};
+
+		function guid() {
+  			function s4() {
+  				return Math.floor((1 + Math.random()) * 0x10000)
+					.toString(16)
+					.substring(1);
+  			}
+  			return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+    			s4() + '-' + s4() + s4() + s4();
+		}
+
+		function vector2(X, Y)
+		{
+			this.x = X || 0;
+			this.y = Y || 0;
+
+			this.distance = function(v)
+			{
+				return Math.sqrt(Math.pow(v.x - this.x, 2) + Math.pow(v.y - this.y, 2));
+			};
+
+			this.distanceSquared = function(v)
+			{
+				return Math.pow(v.x - this.x, 2) + Math.pow(v.y - this.y, 2);
+			};
+
+			this.toVector3 = function() {
+				return new THREE.Vector3().set(x,y,0);
+			};
+
+			this.set = function(x,y)
+			{
+				this.x = x || 0;
+				this.y = y || 0;
+
+				return this;
+			};
+
+			this.addScalar = function(s)
+			{
+				this.set(this.x + s, this.y + s);
+				return this;
+			};
+
+			this.multiplyScalar = function(s)
+			{
+				this.set(this.x * s, this.y * s);
+				return this;
+			};
+
+			this.divideScalar = function(s)
+			{
+				if (s != 0)
+				{
+					this.x = this.x / s;
+					this.y = this.y / s;
+				}
+				return this;
+			};
+
+			this.setV = function(v)
+			{
+				this.x = v.x || 0;
+				this.y = v.y || 0;
+
+				return this;
+			};
+
+			this.add = function(v)
+			{
+				this.set(this.x + v.x, this.y + v.y);
+				return this;
+			};
+
+			this.multiply = function(v)
+			{
+				this.set(this.x * v.x, this.y * v.y);
+				return this;
+			};
+
+			this.length = function()
+			{
+				return Math.sqrt(Math.pow(this.x, 2) + Math.pow(this.y, 2))
+			};
+
+			this.normalize = function()
+			{
+				this.divideScalar(this.length());
+				return this;
+			};
+
+			this.getUnitDirection = function(v)
+			{
+				return (new vector2(v.x - this.x, v.y - this.y)).normalize();
+			};
+
+			this.getMidPoint = function(v)
+			{
+				return new vector2((this.x + v.x)/2, (this.y + v.y)/2);
+			};
+
+			this.clampWithin = function(s)
+			{
+				if (this.x > s) this.x = -s;
+				if (this.y > s) this.y = -s;
+
+				if (this.x < -s) this.x = s;
+				if (this.y < -s) this.y = s;
+			}
+
+			this.toWords = function()
+			{
+				return {x: this.x, y: this.y};
+			};
+
+			return this;
+		};
+
+		function weightedColor(w)
+		{
+			var colorVal = Math.round(w * 99)
+			var R = colorVal.toString();
+
+			if (colorVal <= 30) 
+			{
+				R = "0000000" + R + "0";
+			}
+			else if (colorVal <= 60)
+			{
+				R = "0000000" + R + "00";
+			}
+			else
+			{
+				R = "000000f" + R + "0000";
+			}
+
+			R = R.slice(R.length - 6);
+
+			return "#" + R;
+		};
+
+		function makePlanet3(mass, position, velocity, uuid)
+		{
+			var radius = 1/controlObject.MassToVolumeRatio * mass + 1;
+
+			var geometry = new THREE.CircleGeometry( radius || 1, 32 );
+			var material = new THREE.MeshBasicMaterial( { color: 0xff00ff } );
+			var circle = new THREE.Mesh( geometry, material );
+			scene.add( circle );
+
+			var newplanet = {
+				uuid: uuid || guid(),
+				mesh: circle,
+				radius: radius || 1,
+				mass: mass || 1,
+				position: new vector2(0,0),
+				velocity: new vector2(0,0),
+				update: function()
+				{
+					this.mesh.position.set(this.position.x, this.position.y, this.mass / mostMassiveMass * -1);
+					this.mesh.material.color.set(weightedColor(this.mass /  mostMassiveMass));
+				}
+			};
+
+			planets.add(newplanet);
+
+			if (planets.get(mostMassive) != undefined)
+			{
+				if (planets.get(mostMassive).mass < mass) 
+				{
+					mostMassive = newplanet.uuid;
+					mostMassiveMass = newplanet.mass;
+				}
+			}
+			else
+			{
+				mostMassive = newplanet.uuid;
+				mostMassiveMass = newplanet.mass;
+			}
+
+			newplanet.mesh.material.color.set(weightedColor(mass / planets.get(mostMassive).mass,0,0.9,0.1));
+
+			planets.get(newplanet.uuid).position.setV(position);
+			planets.get(newplanet.uuid).velocity = velocity;
+		};
+
+
+		function calculateOrbits()
+		{
+			var summedForce;
+			var ithPlanet;
+			var jthPlanet;
+
+			for (var key1 in planets.listOfPlanets) {if (planets.listOfPlanets.hasOwnProperty(key1)) {
+
+				summedForce = new vector2();
+				ithPlanet = planets.get(key1);
+
+				for (var key2 in planets.listOfPlanets) {if (planets.listOfPlanets.hasOwnProperty(key2)) {
+
+					jthPlanet = planets.get(key2);
+
+					if (key1 != key2 && ithPlanet.position.distanceSquared(jthPlanet.position) != 0) 
+					{
+						summedForce.add(ithPlanet.position.getUnitDirection(jthPlanet.position).multiplyScalar((controlObject.GravitationalConstant*ithPlanet.mass*jthPlanet.mass/ithPlanet.position.distanceSquared(jthPlanet.position))));
+					}
+
+				}}
+
+				ithPlanet.velocity.add(summedForce.multiplyScalar(controlObject.TimeStep).divideScalar(ithPlanet.mass));
+			}}
+		};
+
+		function collisonDetecton()
+		{
+			var ithPlanet;
+			var jthPlanet;
+
+			for (var key1 in planets.listOfPlanets) {if (planets.listOfPlanets.hasOwnProperty(key1)) {
+
+				ithPlanet = planets.get(key1);
+
+				for (var key2 in planets.listOfPlanets) {if (planets.listOfPlanets.hasOwnProperty(key2)) {
+
+					jthPlanet = planets.get(key2);
+
+					if (key1 != key2 && ithPlanet.position.distance(jthPlanet.position) < (ithPlanet.radius + jthPlanet.radius) * controlObject.Clumping)
+					{
+						var newvelocity = new vector2();
+						newvelocity.x = (ithPlanet.mass*ithPlanet.velocity.x + jthPlanet.mass*jthPlanet.velocity.x)/(ithPlanet.mass + jthPlanet.mass);
+						newvelocity.y = (ithPlanet.mass*ithPlanet.velocity.y + jthPlanet.mass*jthPlanet.velocity.y)/(ithPlanet.mass + jthPlanet.mass);
+
+						var newPosition = new vector2();
+						newPosition = (ithPlanet.mass > jthPlanet.mass ? ithPlanet.position : jthPlanet.position);
+
+						makePlanet3(
+							ithPlanet.mass + jthPlanet.mass,
+							newPosition,
+							newvelocity
+						);
+
+						if (ithPlanet.uuid == uuidToTrack) uuidToTrack = ithPlanet.uuid;
+						if (jthPlanet.uuid == uuidToTrack) uuidToTrack = jthPlanet.uuid;
+
+						planets.remove(key1);
+						planets.remove(key2);
+
+					}
+
+				}}
+			}}
+		}
+
+		function explode(uuid)
+		{
+			var pieces = Math.round(controlObject.SuperNovaPieces);
+			var superNova = planets.get(uuid);
+			for (var i = 0; i < pieces; i++)
+			{
+				var direction = new vector2().getUnitDirection(new vector2(Math.cos(i * 2 * Math.PI / pieces),Math.sin(i * 2 * Math.PI / pieces)))
+
+				console.log( superNova.mass );
+
+				makePlanet3(
+					superNova.mass / pieces,
+					superNova.position.add(direction.multiplyScalar(superNova.radius)),
+					direction.multiplyScalar(controlObject.ExplodeSpeed).add(superNova.velocity)
+				);
+			}
+
+			planets.remove(uuid);
+		}
+
+		function superNovaCheck()
+		{
+			if (planets.get(mostMassive) != undefined && controlObject.AllowSuperNovas)
+			{
+				var massivePlanet = planets.get(mostMassive);
+				if (massivePlanet.mass >= controlObject.SuperNovaMass)
+				{
+					explode(mostMassive);
+				}
+			}
+		}
+
+		var animate = function () {
+			requestAnimationFrame( animate );
+
+			collisonDetecton();
+			calculateOrbits();
+			superNovaCheck();
+
+			var ithPlanet;
+			for (var key in planets.listOfPlanets) {if (planets.listOfPlanets.hasOwnProperty(key)) {
+
+				ithPlanet = planets.get(key);
+				ithPlanet.velocity.multiplyScalar(controlObject.spaceFriction);
+				ithPlanet.position.x += ithPlanet.velocity.x * controlObject.TimeStep;
+				ithPlanet.position.y += ithPlanet.velocity.y * controlObject.TimeStep;
+
+				ithPlanet.position.clampWithin(controlObject.Area || 1000);
+
+				ithPlanet.update();
+			}}
+
+			camera.position.z = controlObject.cameraZoom;
+
+			if (mostMassive) 
+			{
+				//camera.position.set(planets.get(mostMassive).position.x, planets.get(mostMassive).position.y, camera.position.z);
+				//camera.position.z = planets.get(mostMassive).radius*10 - Area/(100*planets.get(mostMassive).radius);
+			}
+
+			renderer.render(scene, camera);
+		};
+
+	// Region Fields
+
+		var planets = new planetHolder();
+		var uuidToTrack;
+		var mostMassive;
+		var mostMassiveMass = 100;
+
+		var controlObject = {
+
+			cameraZoom: 200,
+			spaceFriction: 1,
+			Clumping: 0.4,
+			GravitationalConstant: 10,//6.67408 * Math.pow(10,-11),
+			TimeStep: 0.05,
+
+			NumberOfPlanets: 80,
+			GVariants: 20,//100000000000,
+			Area: 150,
+			InitalSpeed: 10,
+			MassToVolumeRatio: 100,//50000000000,
+
+			AllowSuperNovas: true,
+			SuperNovaMass: 400,
+			SuperNovaPieces: 30,
+			ExplodeSpeed: 2,
+
+			StartUniverse: function()
+			{
+				this.ClearUniverse();
+				for (var i = 0; i < this.NumberOfPlanets; i++)
+				{
+					makePlanet3(Math.random() * this.GVariants, new vector2((Math.random() * this.Area) - this.Area*0.5, (Math.random() * this.Area) - this.Area*0.5), (new vector2(Math.random() * Math.pow(-1,i),Math.random() * Math.pow(-1,i))).multiplyScalar(this.InitalSpeed));
+				}
+			},
+
+			ClearUniverse: function()
+			{
+				planets.clear();
+				mostMassive = undefined;
+			},
+		}		
+
+	// End Region
+
+		var gui = new dat.gui.GUI();
+
+		gui.remember(controlObject);
+
+		gui.add(controlObject, "cameraZoom");
+		gui.add(controlObject, "spaceFriction");
+		gui.add(controlObject, "Clumping");
+		gui.add(controlObject, "GravitationalConstant");
+		gui.add(controlObject, "TimeStep");
+
+		gui.add(controlObject, "NumberOfPlanets");
+		gui.add(controlObject, "GVariants");
+		gui.add(controlObject, "Area");
+		gui.add(controlObject, "InitalSpeed");
+		gui.add(controlObject, "MassToVolumeRatio");
+
+		gui.add(controlObject, "AllowSuperNovas");
+		gui.add(controlObject, "SuperNovaMass");
+		gui.add(controlObject, "SuperNovaPieces");
+		gui.add(controlObject, "ExplodeSpeed");
+
+		gui.add(controlObject, "StartUniverse");
+		gui.add(controlObject, "ClearUniverse");
+
+		controlObject.StartUniverse();
+
+		animate();
+
+	// End Region
+
+	</script>
+</body>
+</html>
+
